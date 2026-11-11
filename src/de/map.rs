@@ -18,6 +18,7 @@ pub(super) struct Map<'de> {
     iter: Peekable<IntoIter<(Key<'de>, Value<'de>)>>,
     human_readable: bool,
     coerce_numbers: bool,
+    coerce_unit_to_none: bool,
 }
 
 impl<'de> Map<'de> {
@@ -25,10 +26,12 @@ impl<'de> Map<'de> {
         vec: Vec<(Key<'de>, Value<'de>)>,
         human_readable: bool,
         coerce_numbers: bool,
+        coerce_unit_to_none: bool,
     ) -> Self {
         Self {
             human_readable,
             coerce_numbers,
+            coerce_unit_to_none,
             iter: vec.into_iter().peekable(),
         }
     }
@@ -48,6 +51,7 @@ impl<'de> de::MapAccess<'de> for Map<'de> {
                         value,
                         human_readable: self.human_readable,
                         coerce_numbers: self.coerce_numbers,
+                        coerce_unit_to_none: self.coerce_unit_to_none,
                     };
                     seed.deserialize(deserializer).map(Some)
                 }
@@ -67,6 +71,7 @@ impl<'de> de::MapAccess<'de> for Map<'de> {
                     value,
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 };
                 seed.deserialize(deserializer)
             }
@@ -92,6 +97,7 @@ impl<'de> de::MapAccess<'de> for Map<'de> {
                             value,
                             human_readable: self.human_readable,
                             coerce_numbers: self.coerce_numbers,
+                            coerce_unit_to_none: self.coerce_unit_to_none,
                         };
                         kseed.deserialize(deserializer)?
                     }
@@ -100,6 +106,7 @@ impl<'de> de::MapAccess<'de> for Map<'de> {
                     value,
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 };
                 let value = vseed.deserialize(deserializer)?;
                 Ok(Some((key, value)))
@@ -116,24 +123,24 @@ impl<'de> de::MapAccess<'de> for Map<'de> {
     }
 }
 
-impl<'de> From<(Vec<(Cow<'static, str>, Value<'de>)>, bool, bool)> for Map<'de> {
-    fn from(fields: (Vec<(Cow<'static, str>, Value<'de>)>, bool, bool)) -> Self {
+impl<'de> From<(Vec<(Cow<'static, str>, Value<'de>)>, bool, bool, bool)> for Map<'de> {
+    fn from(fields: (Vec<(Cow<'static, str>, Value<'de>)>, bool, bool, bool)) -> Self {
         let mut vec = Vec::with_capacity(fields.0.len());
         for (index, (key, value)) in fields.0.into_iter().enumerate() {
             let key = Key::Identifier(Identifier::new(key, index as u64));
             vec.push((key, value));
         }
-        Self::new(vec, fields.1, fields.2)
+        Self::new(vec, fields.1, fields.2, fields.3)
     }
 }
 
-impl<'de> From<(Vec<(Value<'de>, Value<'de>)>, bool, bool)> for Map<'de> {
-    fn from(fields: (Vec<(Value<'de>, Value<'de>)>, bool, bool)) -> Self {
+impl<'de> From<(Vec<(Value<'de>, Value<'de>)>, bool, bool, bool)> for Map<'de> {
+    fn from(fields: (Vec<(Value<'de>, Value<'de>)>, bool, bool, bool)) -> Self {
         let mut vec = Vec::with_capacity(fields.0.len());
         for (key, value) in fields.0 {
             let key = Key::Value(key);
             vec.push((key, value));
         }
-        Self::new(vec, fields.1, fields.2)
+        Self::new(vec, fields.1, fields.2, fields.3)
     }
 }

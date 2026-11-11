@@ -31,6 +31,7 @@ pub(super) struct Deserializer<'de> {
     enum_box: Box<Enum<'de>>,
     human_readable: bool,
     coerce_numbers: bool,
+    coerce_unit_to_none: bool,
 }
 
 impl<'de> de::EnumAccess<'de> for Deserializer<'de> {
@@ -72,6 +73,7 @@ impl<'de> de::VariantAccess<'de> for Deserializer<'de> {
                     value,
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 };
                 seed.deserialize(deserializer)
             }
@@ -87,9 +89,12 @@ impl<'de> de::VariantAccess<'de> for Deserializer<'de> {
         V: de::Visitor<'de>,
     {
         match self.enum_box.data {
-            Data::Tuple { values } => {
-                visitor.visit_seq(Seq::new(values, self.human_readable, self.coerce_numbers))
-            }
+            Data::Tuple { values } => visitor.visit_seq(Seq::new(
+                values,
+                self.human_readable,
+                self.coerce_numbers,
+                self.coerce_unit_to_none,
+            )),
             _ => Err(self.enum_box.unexpected(Expected::Enum {
                 name: Some(self.expected.into_owned()),
                 typ: Some(DataType::Tuple),
@@ -110,6 +115,7 @@ impl<'de> de::VariantAccess<'de> for Deserializer<'de> {
                 fields,
                 self.human_readable,
                 self.coerce_numbers,
+                self.coerce_unit_to_none,
             ))),
             _ => Err(self.enum_box.unexpected(Expected::Enum {
                 name: Some(self.expected.into_owned()),
@@ -124,6 +130,7 @@ pub(super) fn visit_enum<'de, V>(
     enum_box: Box<Enum<'de>>,
     human_readable: bool,
     coerce_numbers: bool,
+    coerce_unit_to_none: bool,
     visitor: V,
 ) -> Result<V::Value, Error>
 where
@@ -134,6 +141,7 @@ where
         enum_box,
         human_readable,
         coerce_numbers,
+        coerce_unit_to_none,
     };
     visitor.visit_enum(deserializer)
 }
@@ -145,6 +153,7 @@ pub(super) struct Access<'de> {
     pub(super) data: Option<Value<'de>>,
     pub(super) human_readable: bool,
     pub(super) coerce_numbers: bool,
+    pub(super) coerce_unit_to_none: bool,
 }
 
 impl<'de> de::EnumAccess<'de> for Access<'de> {
@@ -159,6 +168,7 @@ impl<'de> de::EnumAccess<'de> for Access<'de> {
             value: self.name,
             human_readable: self.human_readable,
             coerce_numbers: self.coerce_numbers,
+            coerce_unit_to_none: self.coerce_unit_to_none,
         };
         seed.deserialize(deserializer).map(|v| {
             (
@@ -168,6 +178,7 @@ impl<'de> de::EnumAccess<'de> for Access<'de> {
                     data: self.data,
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 },
             )
         })
@@ -180,6 +191,7 @@ pub(super) struct VariantAccess<'de> {
     data: Option<Value<'de>>,
     human_readable: bool,
     coerce_numbers: bool,
+    coerce_unit_to_none: bool,
 }
 
 impl<'de> de::VariantAccess<'de> for VariantAccess<'de> {
@@ -205,6 +217,7 @@ impl<'de> de::VariantAccess<'de> for VariantAccess<'de> {
                     value,
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 };
                 seed.deserialize(deserializer)
             }
@@ -225,6 +238,7 @@ impl<'de> de::VariantAccess<'de> for VariantAccess<'de> {
                     value: Value::Seq(seq),
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 };
                 deserializer.deserialize_seq(visitor)
             }
@@ -253,6 +267,7 @@ impl<'de> de::VariantAccess<'de> for VariantAccess<'de> {
                     value: Value::Map(map),
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 };
                 deserializer.deserialize_map(visitor)
             }

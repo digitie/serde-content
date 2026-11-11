@@ -274,3 +274,104 @@ fn roundtrip_struct_variant() {
         baz: 'a',
     });
 } */
+
+#[test]
+fn deserialize_null_options() {
+    use alloc::borrow::Cow;
+    use alloc::boxed::Box;
+    use serde_content::Value;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Record {
+        absent: Option<String>,
+        present: Option<String>,
+        sequence: Vec<Option<Vec<u8>>>,
+        unit: (),
+    }
+
+    let value = Value::Map(vec![
+        (Value::String(Cow::Borrowed("absent")), Value::Unit),
+        (
+            Value::String(Cow::Borrowed("present")),
+            Value::String(Cow::Borrowed("yes")),
+        ),
+        (
+            Value::String(Cow::Borrowed("sequence")),
+            Value::Seq(vec![Value::Unit, Value::Seq(vec![])]),
+        ),
+        (Value::String(Cow::Borrowed("unit")), Value::Unit),
+    ]);
+
+    assert!(Deserializer::new(value.clone())
+        .deserialize::<Record>()
+        .is_err());
+    assert_eq!(
+        Deserializer::new(value)
+            .coerce_unit_to_none()
+            .deserialize::<Record>()
+            .unwrap(),
+        Record {
+            absent: None,
+            present: Some(String::from("yes")),
+            sequence: vec![None, Some(vec![])],
+            unit: ()
+        },
+    );
+    assert_eq!(
+        Deserializer::new(Value::Option(Some(Box::new(Value::Unit))))
+            .coerce_unit_to_none()
+            .deserialize::<Option<()>>()
+            .unwrap(),
+        Some(()),
+    );
+}
+
+#[test]
+fn deserialize_null_options_in_enum() {
+    use alloc::borrow::Cow;
+    use alloc::boxed::Box;
+    use serde_content::{Data, Enum, Value};
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    enum Example {
+        Tuple(Option<String>, ()),
+        Struct { absent: Option<String> },
+        Newtype(Option<String>),
+    }
+
+    for (variant, data, expected) in [
+        (
+            "Tuple",
+            Data::Tuple {
+                values: vec![Value::Unit, Value::Unit],
+            },
+            Example::Tuple(None, ()),
+        ),
+        (
+            "Struct",
+            Data::Struct {
+                fields: vec![(Cow::Borrowed("absent"), Value::Unit)],
+            },
+            Example::Struct { absent: None },
+        ),
+        (
+            "Newtype",
+            Data::NewType { value: Value::Unit },
+            Example::Newtype(None),
+        ),
+    ] {
+        let value = Value::Enum(Box::new(Enum {
+            name: Cow::Borrowed("Example"),
+            variant: Cow::Borrowed(variant),
+            variant_index: 0,
+            data,
+        }));
+        assert_eq!(
+            Deserializer::new(value)
+                .coerce_unit_to_none()
+                .deserialize::<Example>()
+                .unwrap(),
+            expected,
+        );
+    }
+}
