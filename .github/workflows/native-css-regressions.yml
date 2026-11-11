@@ -23,7 +23,4 @@ jobs:
       - run: cargo +1.92.0 check --no-default-features --features serde
       - run: cargo +1.92.0 check --no-default-features --features derive
       - name: 전체 시험과 doctest
-        # 원본 테스트 모델의 미사용 필드 경고는 원문 로그에 남기며 제품 clippy는 위에서 엄격 검사한다.
         run: cargo +1.92.0 test
-        env:
-          RUSTFLAGS: --cap-lints=warn

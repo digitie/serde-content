@@ -23,3 +23,15 @@ fn value_size() {
 fn error_size() {
     assert!(size_of::<Error>() <= 8);
 }
+
+// 파생 타입이 실제 값의 직렬화·역직렬화에서도 중첩 Value를 보존하는지 검증한다.
+#[cfg(feature = "derive")]
+#[test]
+fn derived_nested_value_roundtrip() {
+    let original = Foo(Bar(Value::Unit));
+    let encoded = crate::Serializer::new().serialize(&original).unwrap();
+    let restored: Foo = crate::Deserializer::new(encoded).deserialize().unwrap();
+    let Foo(Bar(original_value)) = original;
+    let Foo(Bar(restored_value)) = restored;
+    assert_eq!(original_value, restored_value);
+}
