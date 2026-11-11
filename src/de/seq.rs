@@ -9,13 +9,20 @@ pub(super) struct Seq<'de> {
     iter: IntoIter<Value<'de>>,
     human_readable: bool,
     coerce_numbers: bool,
+    coerce_unit_to_none: bool,
 }
 
 impl<'de> Seq<'de> {
-    pub(super) fn new(vec: Vec<Value<'de>>, human_readable: bool, coerce_numbers: bool) -> Self {
+    pub(super) fn new(
+        vec: Vec<Value<'de>>,
+        human_readable: bool,
+        coerce_numbers: bool,
+        coerce_unit_to_none: bool,
+    ) -> Self {
         Self {
             human_readable,
             coerce_numbers,
+            coerce_unit_to_none,
             iter: vec.into_iter(),
         }
     }
@@ -34,6 +41,7 @@ impl<'de> de::SeqAccess<'de> for Seq<'de> {
                     value,
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 };
                 seed.deserialize(deserializer).map(Some)
             }

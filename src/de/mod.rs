@@ -38,6 +38,7 @@ pub struct Deserializer<'de> {
     value: Value<'de>,
     human_readable: bool,
     coerce_numbers: bool,
+    coerce_unit_to_none: bool,
 }
 
 impl<'de> Deserializer<'de> {
@@ -50,6 +51,7 @@ impl<'de> Deserializer<'de> {
             value,
             human_readable: false,
             coerce_numbers: false,
+            coerce_unit_to_none: false,
         }
     }
 
@@ -62,6 +64,16 @@ impl<'de> Deserializer<'de> {
     /// When deseriazing numbers try to coerce different number types into the expected type.
     pub const fn coerce_numbers(mut self) -> Self {
         self.coerce_numbers = true;
+        self
+    }
+
+    /// Treat unit values as absent when deserializing an option.
+    ///
+    /// Enable this for formats such as JSON and JavaScript that represent both
+    /// unit and absent optional values as null. The default preserves unit as
+    /// `Some(())`.
+    pub const fn coerce_unit_to_none(mut self) -> Self {
+        self.coerce_unit_to_none = true;
         self
     }
 
@@ -125,12 +137,18 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                 Cow::Borrowed(v) => visitor.visit_borrowed_bytes(v),
                 Cow::Owned(v) => visitor.visit_byte_buf(v),
             },
-            Value::Seq(v) => {
-                visitor.visit_seq(Seq::new(v, self.human_readable, self.coerce_numbers))
-            }
-            Value::Map(v) => {
-                visitor.visit_map(Map::from((v, self.human_readable, self.coerce_numbers)))
-            }
+            Value::Seq(v) => visitor.visit_seq(Seq::new(
+                v,
+                self.human_readable,
+                self.coerce_numbers,
+                self.coerce_unit_to_none,
+            )),
+            Value::Map(v) => visitor.visit_map(Map::from((
+                v,
+                self.human_readable,
+                self.coerce_numbers,
+                self.coerce_unit_to_none,
+            ))),
             Value::Option(v) => match v {
                 Some(v) => {
                     self.value = *v;
@@ -145,7 +163,12 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                     visitor.visit_newtype_struct(self)
                 }
                 Data::Tuple { values } => {
-                    let tuple = Seq::new(values, self.human_readable, self.coerce_numbers);
+                    let tuple = Seq::new(
+                        values,
+                        self.human_readable,
+                        self.coerce_numbers,
+                        self.coerce_unit_to_none,
+                    );
                     visitor.visit_seq(tuple)
                 }
                 Data::Struct { fields } => {
@@ -155,7 +178,12 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                         let key = Key::Identifier(Identifier::new(key, index as u64));
                         vec.push((key, value));
                     }
-                    let data = Map::new(vec, self.human_readable, self.coerce_numbers);
+                    let data = Map::new(
+                        vec,
+                        self.human_readable,
+                        self.coerce_numbers,
+                        self.coerce_unit_to_none,
+                    );
                     visitor.visit_map(data)
                 }
             },
@@ -164,11 +192,15 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                 v,
                 self.human_readable,
                 self.coerce_numbers,
+                self.coerce_unit_to_none,
                 visitor,
             ),
-            Value::Tuple(v) => {
-                visitor.visit_seq(Seq::new(v, self.human_readable, self.coerce_numbers))
-            }
+            Value::Tuple(v) => visitor.visit_seq(Seq::new(
+                v,
+                self.human_readable,
+                self.coerce_numbers,
+                self.coerce_unit_to_none,
+            )),
         }
     }
 
@@ -357,6 +389,7 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
         V: Visitor<'de>,
     {
         match self.value {
+            Value::Unit if self.coerce_unit_to_none => visitor.visit_none(),
             Value::Option(v) => match v {
                 Some(v) => {
                     self.value = *v;
@@ -430,9 +463,12 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Seq(v) => {
-                visitor.visit_seq(Seq::new(v, self.human_readable, self.coerce_numbers))
-            }
+            Value::Seq(v) => visitor.visit_seq(Seq::new(
+                v,
+                self.human_readable,
+                self.coerce_numbers,
+                self.coerce_unit_to_none,
+            )),
             _ => Err(self.value.unexpected(Expected::Seq)),
         }
     }
@@ -442,9 +478,12 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Tuple(v) => {
-                visitor.visit_seq(Seq::new(v, self.human_readable, self.coerce_numbers))
-            }
+            Value::Tuple(v) => visitor.visit_seq(Seq::new(
+                v,
+                self.human_readable,
+                self.coerce_numbers,
+                self.coerce_unit_to_none,
+            )),
             Value::Seq(_) => self.deserialize_seq(visitor),
             _ => Err(self.value.unexpected(Expected::Tuple(len))),
         }
@@ -461,9 +500,12 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
     {
         match self.value {
             Value::Struct(v) => match v.data {
-                Data::Tuple { values } => {
-                    visitor.visit_seq(Seq::new(values, self.human_readable, self.coerce_numbers))
-                }
+                Data::Tuple { values } => visitor.visit_seq(Seq::new(
+                    values,
+                    self.human_readable,
+                    self.coerce_numbers,
+                    self.coerce_unit_to_none,
+                )),
                 _ => Err(v.unexpected(Expected::Struct {
                     name: Some(name.to_owned()),
                     typ: Some(DataType::Tuple),
@@ -482,9 +524,12 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Map(v) => {
-                visitor.visit_map(Map::from((v, self.human_readable, self.coerce_numbers)))
-            }
+            Value::Map(v) => visitor.visit_map(Map::from((
+                v,
+                self.human_readable,
+                self.coerce_numbers,
+                self.coerce_unit_to_none,
+            ))),
             _ => Err(self.value.unexpected(Expected::Map)),
         }
     }
@@ -504,6 +549,7 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                     fields,
                     self.human_readable,
                     self.coerce_numbers,
+                    self.coerce_unit_to_none,
                 ))),
                 _ => Err(v.unexpected(Expected::Struct {
                     name: Some(name.to_owned()),
@@ -533,6 +579,7 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                 v,
                 self.human_readable,
                 self.coerce_numbers,
+                self.coerce_unit_to_none,
                 visitor,
             ),
             Value::String(string) => visitor.visit_enum(r#enum::Access {
@@ -541,6 +588,7 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                 data: None,
                 human_readable: self.human_readable,
                 coerce_numbers: self.coerce_numbers,
+                coerce_unit_to_none: self.coerce_unit_to_none,
             }),
             Value::Map(mut map) if map.len() == 1 => {
                 let (variant, data) = map.pop().unwrap();
@@ -550,6 +598,7 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
                     data: Some(data),
                     human_readable: self.human_readable,
                     coerce_numbers: self.coerce_numbers,
+                    coerce_unit_to_none: self.coerce_unit_to_none,
                 })
             }
             _ => Err(self.value.unexpected(Expected::Enum {
