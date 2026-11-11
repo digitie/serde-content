@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# SPDX-FileCopyrightText: 2026 Youn-sok Choi (digitie)
+name: 원본 수정 Rust 회귀
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: 빌드와 같은 Rust 도구 버전
+        run: rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+      - run: cargo +1.92.0 fmt --all -- --check
+      - run: cargo +1.92.0 clippy --all-features -- -D warnings
+      - run: cargo +1.92.0 check --no-default-features
+      - run: cargo +1.92.0 check --no-default-features --features serde
+      - run: cargo +1.92.0 check --no-default-features --features derive
+      - name: 전체 시험과 doctest
+        # 원본 테스트 모델의 미사용 필드 경고는 원문 로그에 남기며 제품 clippy는 위에서 엄격 검사한다.
+        run: cargo +1.92.0 test
+        env:
+          RUSTFLAGS: --cap-lints=warn
